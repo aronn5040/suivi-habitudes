@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vérificateur d'Habitudes</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { color: #333; }
+  .category, .activity {
+    background: #fff;
+    padding: 15px 20px;
+    margin: 10px;
+    border-radius: 10px;
+    width: 320px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .activity input {
+    width: 60px;
+    padding: 5px;
+    margin-right: 10px;
+  }
+  button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    background: #4caf50;
+    color: white;
+    cursor: pointer;
+  }
+  button.done {
+    background: #ccc;
+    cursor: default;
+  }
+  #score {
+    font-size: 20px;
+    font-weight: bold;
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Vérificateur d'Habitudes</h1>
+
+<!-- Catégories -->
+<div class="category" onclick="showActivities('sport')">🏃 Sport</div>
+<div class="category" onclick="showActivities('study')">📚 Étude</div>
+<div class="category" onclick="showActivities('reading')">📖 Lecture</div>
+
+<!-- Conteneur des activités -->
+<div id="activitiesContainer"></div>
+
+<div id="score">Points : 0</div>
+
+<script>
+// Points total
+let points = 0;
+
+// Liste des activités par catégorie
+const habits = {
+  sport: [
+    { name: "Courir 1 km", target: 1, unit: "km" },
+    { name: "Faire 50 pompes", target: 50, unit: "pompes" },
+    { name: "Faire 30 squats", target: 30, unit: "squats" }
+  ],
+  study: [
+    { name: "Étudier 1h", target: 1, unit: "h" },
+    { name: "Faire un exercice", target: 1, unit: "exercice" }
+  ],
+  reading: [
+    { name: "Lire 20 pages", target: 20, unit: "pages" },
+    { name: "Lire 1 chapitre", target: 1, unit: "chapitre" }
+  ]
+};
+
+// Affiche les activités d'une catégorie
+function showActivities(category) {
+  const container = document.getElementById('activitiesContainer');
+  container.innerHTML = ''; // Reset
+  habits[category].forEach((activity, index) => {
+    const div = document.createElement('div');
+    div.className = 'activity';
+    div.innerHTML = `
+      <span>${activity.name}</span>
+      <div>
+        <input type="number" min="0" placeholder="0" id="${category}-${index}">
+        <button onclick="checkActivity('${category}', ${index}, this)">✔</button>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// Vérifie l'activité et ajoute les points
+function checkActivity(category, index, btn) {
+  const input = document.getElementById(`${category}-${index}`);
+  const value = parseInt(input.value);
+  const activity = habits[category][index];
+
+  if (isNaN(value)) {
+    alert("Veuillez entrer un nombre.");
+    return;
+  }
+
+  if (value >= activity.target) {
+    points += 1;
+    document.getElementById('score').innerText = 'Points : ' + points;
+    btn.classList.add('done');
+    btn.innerText = '✔';
+    btn.disabled = true;
+    input.disabled = true;
+  } else {
+    alert(`Objectif non atteint ! Il fallait : ${activity.target} ${activity.unit}`);
+  }
+}
+</script>
+
+</body>
+</html>
