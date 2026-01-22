@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💰 Gestion d'argent de poche - Pro Ultime</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+  font-family: 'Arial', sans-serif;
+  background: #f0f2f5;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+}
+h1 { text-align: center; font-size: 2em; margin-bottom: 20px; }
+.container {
+  max-width: 1000px;
+  margin: auto;
+  background: #fff;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+.form-group { margin-bottom: 15px; display: flex; align-items: center; gap:10px; }
+label { width: 150px; font-weight: bold; }
+input, select { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
+button {
+  padding: 8px 12px;
+  margin: 5px 5px 5px 0;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: bold;
+  transition: 0.2s;
+}
+button:hover { opacity: 0.9; }
+#btn-entree { background: #4caf50; }
+#btn-depense { background: #f44336; }
+#btn-supprimer { background: #ff5722; }
+#btn-graph { background: #2196f3; }
+#btn-export { background: #9c27b0; }
+
+#transactions { width: 100%; border-collapse: collapse; margin-top: 20px; }
+#transactions th, #transactions td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+#transactions th { background: #e0e0e0; cursor: pointer; }
+.income { color: green; font-weight: bold; }
+.expense { color: red; font-weight: bold; }
+
+#premium-section { margin-top: 30px; background: #e0f7fa; padding: 15px; border-radius: 10px; }
+#search { margin-bottom: 10px; padding: 6px; border-radius: 6px; border: 1px solid #ccc; width: 100%; }
+
+#solde {
+  text-align: center;
+  font-size: 1.5em;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.budget-warning { color:red; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<h1>💰 Gestion d'argent de poche - Pro Ultime</h1>
+<div class="container">
+
+<div>
+  <div class="form-group">
+    <label>Montant (€)</label>
+    <input type="number" id="montant" step="0.01">
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <input type="text" id="description">
+  </div>
+  <div class="form-group">
+    <label>Catégorie</label>
+    <select id="categorie">
+      <option>Loisirs - Jeux</option>
+      <option>Loisirs - Sorties</option>
+      <option>Transport - Bus</option>
+      <option>Transport - Taxi</option>
+      <option>Nourriture - Courses</option>
+      <option>Nourriture - Restaurant</option>
+      <option>École - Fournitures</option>
+      <option>École - Transport</option>
+      <option>Autre</option>
+    </select>
+  </div>
+  <button id="btn-entree" onclick="ajouterTransaction('entrée')">➕ Entrée</button>
+  <button id="btn-depense" onclick="ajouterTransaction('dépense')">➖ Dépense</button>
+</div>
+
+<h2 id="solde">Solde : 0 €</h2>
+
+<input type="text" id="search" placeholder="Rechercher ou filtrer...">
+
+<table id="transactions">
+  <thead>
+    <tr>
+      <th onclick="trierTable(0)">Date</th>
+      <th onclick="trierTable(1)">Catégorie</th>
+      <th onclick="trierTable(2)">Type</th>
+      <th onclick="trierTable(3)">Montant (€)</th>
+      <th>Description</th>
+      <th>Solde cumulatif (€)</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<button id="btn-graph" onclick="afficherGraphique()">📊 Graphique Dépenses</button>
+<button id="btn-export" onclick="exportCSV()">📁 Export CSV</button>
+
+<div id="premium-section">
+  <h2>💎 Analyse avancée</h2>
+  <canvas id="graphiqueAvance" width="400" height="200"></canvas>
+</div>
+
+</div>
+
+<script>
+// --- Données ---
+function chargerDonnees() { return JSON.parse(localStorage.getItem('transactions')||'[]'); }
+function sauvegarder(donnees) { localStorage.setItem('transactions', JSON.stringify(donnees)); }
+
+let isPremiumUser = true;
+
+// --- Ajouter transaction ---
+function ajouterTransaction(type) {
+    const montant = parseFloat(document.getElementById('montant').value);
+    const description = document.getElementById('description').value.trim();
+    const categorie = document.getElementById('categorie').value;
+    const date = new Date().toLocaleDateString('fr-FR');
+
+    if(!description || isNaN(montant)) return alert("Montant ou description invalide");
+
+    const transaction = {
+        date: date,
+        type: type === 'entrée' ? 'entrée' : 'dépense',
+        montant: montant,
+        description: description,
+        categorie: categorie
+    };
+
+    const donnees = chargerDonnees();
+    donnees.push(transaction);
+    sauvegarder(donnees);
+
+    document.getElementById('montant').value='';
+    document.getElementById('description').value='';
+    afficherSolde();
+    afficherHistorique();
+    if(isPremiumUser) afficherGraphiqueAvance();
+}
+
+// --- Solde ---
+function afficherSolde() {
+    const donnees = chargerDonnees();
+    let solde=0;
+    donnees.forEach(t=>solde+=t.type==='entrée'?t.montant:-t.montant);
+    const soldeElem = document.getElementById('solde');
+    soldeElem.innerText=`Solde : ${solde.toFixed(2)} €`;
+    soldeElem.style.backgroundColor = solde>50?'green':solde<0?'red':'orange';
+}
+
+// --- Historique ---
+function afficherHistorique() {
+    const tbody=document.querySelector('#transactions tbody');
+    tbody.innerHTML='';
+    const donnees=chargerDonnees();
+    let cumul=0;
+    donnees.forEach((t,index)=>{
+        cumul += t.type==='entrée'?t.montant:-t.montant;
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+            <td>${t.date}</td>
+            <td>${t.categorie}</td>
+            <td class="${t.type==='entrée'?'income':'expense'}">${t.type}</td>
+            <td>${t.montant.toFixed(2)}</td>
+            <td>${t.description}</td>
+            <td>${cumul.toFixed(2)}</td>
+            <td><button id="btn-supprimer" onclick="supprimerTransaction(${index})">🗑️</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// --- Filtrer ---
+document.getElementById('search').addEventListener('input', ()=>{
+    const filtre = document.getElementById('search').value.toLowerCase();
+    const rows = document.querySelectorAll('#transactions tbody tr');
+    rows.forEach(row=>{
+        row.style.display = [...row.cells].some(cell => cell.textContent.toLowerCase().includes(filtre)) ? '' : 'none';
+    });
+});
+
+// --- Supprimer ---
+function supprimerTransaction(index){
+    const donnees=chargerDonnees();
+    donnees.splice(index,1);
+    sauvegarder(donnees);
+    afficherSolde();
+    afficherHistorique();
+    if(isPremiumUser) afficherGraphiqueAvance();
+}
+
+// --- Graphique simple ---
+function afficherGraphique(){
+    const donnees=chargerDonnees();
+    const categories={};
+    donnees.forEach(t=>{if(t.type==='dépense') {
+        const catBase = t.categorie.split(' - ')[0];
+        categories[catBase] = (categories[catBase]||0)+t.montant;
+    }});
+    if(Object.keys(categories).length===0) return alert("Pas de dépenses à afficher.");
+    const canvas=document.createElement('canvas');
+    canvas.width=400; canvas.height=200;
+    document.body.appendChild(canvas);
+    new Chart(canvas.getContext('2d'),{
+        type:'bar',
+        data:{ labels:Object.keys(categories), datasets:[{label:'Dépenses (€)', data:Object.values(categories), backgroundColor:'red'}]},
+        options:{responsive:true,plugins:{legend:{display:false}}}
+    });
+}
+
+// --- Graphique avancé ---
+function afficherGraphiqueAvance(){
+    if(!isPremiumUser) return;
+    const donnees=chargerDonnees();
+    const soldeCumul=[]; let cumul=0;
+    donnees.forEach(t=>{ cumul+=t.type==='entrée'?t.montant:-t.montant; soldeCumul.push(cumul.toFixed(2)); });
+    const ctx=document.getElementById('graphiqueAvance').getContext('2d');
+    new Chart(ctx,{
+        type:'line',
+        data:{
+            labels:donnees.map(t=>t.date),
+            datasets:[{ label:'Solde cumulé (€)', data:soldeCumul, borderColor:'green', fill:false, tension:0.3 }]
+        },
+        options:{ responsive:true }
+    });
+}
+
+// --- Export CSV ---
+function exportCSV(){
+    if(!isPremiumUser) return alert("Version Pro nécessaire !");
+    const donnees=chargerDonnees();
+    if(donnees.length===0) return alert("Aucune transaction à exporter.");
+    let csv="Date,Catégorie,Type,Montant,Description\n";
+    donnees.forEach(t=>{ csv+=`${t.date},${t.categorie},${t.type},${t.montant},${t.description}\n`; });
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='transactions.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+// --- Tri tableau ---
+function trierTable(colIndex) {
+    const table = document.getElementById('transactions');
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.rows);
+    const asc = !tbody.getAttribute('data-sort-asc') || tbody.getAttribute('data-sort-col')!=colIndex;
+    rows.sort((a,b)=>{
+        let aVal = a.cells[colIndex].textContent;
+        let bVal = b.cells[colIndex].textContent;
+        if(!isNaN(parseFloat(aVal)) && !isNaN(parseFloat(bVal))) { aVal=parseFloat(aVal); bVal=parseFloat(bVal); }
+        return asc ? aVal > bVal ? 1 : -1 : aVal < bVal ? 1 : -1;
+    });
+    rows.forEach(r=>tbody.appendChild(r));
+    tbody.setAttribute('data-sort-asc', asc);
+    tbody.setAttribute('data-sort-col', colIndex);
+}
+
+// --- Initialisation ---
+document.getElementById('premium-section').style.display='block';
+afficherSolde();
+afficherHistorique();
+afficherGraphiqueAvance();
+</script>
+
+</body>
+</html>
