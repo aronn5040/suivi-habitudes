@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💰 Gestion d'argent de poche</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* ----------------- Styles modernes ----------------- */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f7f9fc;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+}
+h1{ text-align:center; font-size:2rem; margin-bottom:20px; }
+.container{
+  max-width:1000px;
+  margin:auto;
+  background:#fff;
+  padding:25px;
+  border-radius:12px;
+  box-shadow:0 6px 20px rgba(0,0,0,0.12);
+}
+.form-group{
+  margin-bottom:15px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+label{ width:150px; font-weight:bold; }
+input,select{ flex:1; padding:10px; border-radius:8px; border:1px solid #ccc; font-size:1rem; }
+button{
+  padding:10px 15px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  color:#fff;
+  font-weight:bold;
+  transition:0.2s;
+  font-size:1rem;
+}
+button:hover{ opacity:0.9; transform:scale(1.05); }
+#btn-entree{ background:#4caf50; }
+#btn-depense{ background:#f44336; }
+#btn-supprimer{ background:#ff5722; }
+#btn-graph{ background:#2196f3; }
+#btn-export{ background:#9c27b0; }
+#btn-objectif{ background:#673ab7; }
+#solde{
+  text-align:center;
+  font-size:1.8rem;
+  margin-top:15px;
+  padding:12px;
+  border-radius:10px;
+  color:#fff;
+  transition:0.3s;
+}
+#progress-container{ width:100%; height:15px; background:#eee; border-radius:8px; margin-top:10px; }
+#progress-bar{ height:100%; width:0%; background:#4caf50; border-radius:8px; transition:0.3s; }
+#transactions{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:20px;
+}
+#transactions th,#transactions td{
+  border:1px solid #ccc;
+  padding:10px;
+  text-align:left;
+}
+#transactions th{
+  background:#e0e0e0;
+  cursor:pointer;
+}
+.income{ color:green; font-weight:bold; }
+.expense{ color:red; font-weight:bold; }
+#search{
+  margin-top:15px;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  width:100%;
+  font-size:1rem;
+}
+#affichage-objectif{
+  text-align:center;
+  font-weight:bold;
+  margin-top:10px;
+  font-size:1.1rem;
+}
+canvas{ margin-top:25px; max-width:100%; height:auto; }
+@media (max-width:600px){
+  label{ width:100%; }
+  .form-group{ flex-direction:column; align-items:flex-start; }
+  button{ width:100%; }
+}
+</style>
+</head>
+<body>
+
+<h1>💰 Gestion d'argent</h1>
+
+<div class="container">
+
+  <!-- Formulaire entrée/dépense -->
+  <div class="form-group">
+    <label>Montant (€)</label>
+    <input type="number" id="montant" step="0.01" min="0">
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <input type="text" id="description" maxlength="50" placeholder="Ex: Courses, Bus...">
+  </div>
+  <div class="form-group">
+    <label>Catégorie</label>
+    <select id="categorie">
+      <option>Loisirs - Jeux</option>
+      <option>Loisirs - Sorties</option>
+      <option>Transport - Bus</option>
+      <option>Transport - Taxi</option>
+      <option>Nourriture - Courses</option>
+      <option>Nourriture - Restaurant</option>
+      <option>École - Fournitures</option>
+      <option>École - Transport</option>
+      <option>Autre</option>
+    </select>
+  </div>
+  <button id="btn-entree" onclick="ajouterTransaction('entrée')">➕ Entrée</button>
+  <button id="btn-depense" onclick="ajouterTransaction('dépense')">➖ Dépense</button>
+
+  <!-- Objectif d’épargne -->
+  <div class="form-group">
+    <label>🎯 Objectif (€)</label>
+    <input type="number" id="objectif" min="1" step="1" placeholder="Ex: 200">
+    <button id="btn-objectif" onclick="sauvegarderObjectif()">Enregistrer objectif</button>
+  </div>
+  <p id="affichage-objectif"></p>
+
+  <!-- Solde -->
+  <h2 id="solde">Solde : 0 €</h2>
+  <div id="progress-container"><div id="progress-bar"></div></div>
+
+  <!-- Filtre -->
+  <input type="text" id="search" placeholder="Rechercher ou filtrer...">
+
+  <!-- Table historique -->
+  <table id="transactions">
+    <thead>
+      <tr>
+        <th onclick="trierTable(0)">Date</th>
+        <th onclick="trierTable(1)">Catégorie</th>
+        <th onclick="trierTable(2)">Type</th>
+        <th onclick="trierTable(3)">Montant (€)</th>
+        <th>Description</th>
+        <th>Solde cumulatif (€)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Boutons graphiques / export -->
+  <button id="btn-graph" onclick="afficherGraphique()">📊 Voir le graphique du solde</button>
+  <button id="btn-export" onclick="exportCSV()">📁 Export CSV</button>
+
+  <!-- Canvas graphique -->
+  <canvas id="graphique"></canvas>
+
+</div>
+
+<script>
+// ----------------- Stockage local -----------------
+function chargerDonnees(){ return JSON.parse(localStorage.getItem('transactions')||'[]'); }
+function sauvegarder(donnees){ localStorage.setItem('transactions', JSON.stringify(donnees)); }
+
+// ----------------- Couleurs et icônes -----------------
+const couleurCategorie = {
+  'Loisirs - Jeux':'#ff9800','Loisirs - Sorties':'#ff5722',
+  'Transport - Bus':'#03a9f4','Transport - Taxi':'#2196f3',
+  'Nourriture - Courses':'#8bc34a','Nourriture - Restaurant':'#4caf50',
+  'École - Fournitures':'#9c27b0','École - Transport':'#673ab7',
+  'Autre':'#607d8b'
+};
+const iconeType = { 'entrée':'💰', 'dépense':'💸' };
+
+// ----------------- Fonctions principales -----------------
+function ajouterTransaction(type){
+  const montant=parseFloat(document.getElementById('montant').value);
+  const description=document.getElementById('description').value.trim();
+  const categorie=document.getElementById('categorie').value;
+  const date=new Date().toLocaleDateString('fr-FR');
+
+  if(!description){ alert("Veuillez saisir une description"); return; }
+  if(isNaN(montant)||montant<=0){ alert("Veuillez saisir un montant valide > 0"); return; }
+
+  const transaction={date,type,montant,description,categorie};
+  const donnees=chargerDonnees();
+  donnees.push(transaction);
+  sauvegarder(donnees);
+
+  document.getElementById('montant').value='';
+  document.getElementById('description').value='';
+
+  afficherSolde();
+  afficherHistorique();
+  afficherGraphique();
+}
+
+// ----------------- Objectif d’épargne -----------------
+function sauvegarderObjectif(){
+  const val=parseFloat(document.getElementById('objectif').value);
+  if(isNaN(val)||val<=0){ alert("Entrez un objectif valide > 0"); return; }
+  localStorage.setItem('objectifEpargne', val);
+  afficherObjectif();
+  afficherSolde();
+}
+
+function afficherObjectif(){
+  const obj = localStorage.getItem('objectifEpargne');
+  if(obj){
+    document.getElementById('affichage-objectif').innerText = "🎯 Objectif : " + parseFloat(obj).toFixed(2) + " €";
+  } else {
+    document.getElementById('affichage-objectif').innerText = "";
+  }
+}
+
+// ----------------- Solde -----------------
+function afficherSolde(){
+  const donnees=chargerDonnees();
+  let solde=0;
+  donnees.forEach(t=>solde+=t.type==='entrée'?t.montant:-t.montant);
+
+  const elem=document.getElementById('solde');
+  elem.innerText=`Solde : ${solde.toFixed(2)} €`;
+  elem.style.backgroundColor=solde>50?'#4caf50':solde<0?'#f44336':'#ff9800';
+
+  updateProgress(solde);
+
+  const objectif=parseFloat(localStorage.getItem('objectifEpargne'));
+  if(objectif && solde>=objectif){
+    setTimeout(()=>{ alert("🎉 Bien joué ! Tu as atteint ton objectif d'épargne !"); },300);
+  }
+}
+
+// ----------------- Progress bar -----------------
+function updateProgress(solde){
+  const objectif=parseFloat(localStorage.getItem('objectifEpargne')) || 100;
+  const pourcentage=Math.min((solde/objectif)*100,100);
+  const bar=document.getElementById('progress-bar');
+  bar.style.width=pourcentage+'%';
+  bar.style.background=solde>=objectif?'#4caf50':'#2196f3';
+}
+
+// ----------------- Historique -----------------
+function afficherHistorique(){
+  const tbody=document.querySelector('#transactions tbody');
+  tbody.innerHTML='';
+  const donnees=chargerDonnees();
+  let cumul=0;
+  donnees.forEach((t,index)=>{
+    cumul+=t.type==='entrée'?t.montant:-t.montant;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${t.date}</td>
+      <td>${t.categorie}</td>
+      <td class="${t.type==='entrée'?'income':'expense'}">${iconeType[t.type]} ${t.type}</td>
+      <td>${t.montant.toFixed(2)}</td>
+      <td>${t.description}</td>
+      <td>${cumul.toFixed(2)}</td>
+      <td><button id="btn-supprimer" onclick="supprimerTransaction(${index})">🗑️</button></td>
+    `;
+    tr.cells[1].style.color=couleurCategorie[t.categorie]||'#000';
+    tbody.appendChild(tr);
+  });
+}
+
+// ----------------- Filtre -----------------
+document.getElementById('search').addEventListener('input',()=>{
+  const filtre=document.getElementById('search').value.toLowerCase();
+  document.querySelectorAll('#transactions tbody tr').forEach(row=>{
+    row.style.display=[...row.cells].some(cell=>cell.textContent.toLowerCase().includes(filtre))?'':'none';
+  });
+});
+
+// ----------------- Supprimer -----------------
+function supprimerTransaction(index){
+  const donnees=chargerDonnees();
+  donnees.splice(index,1);
+  sauvegarder(donnees);
+  afficherSolde();
+  afficherHistorique();
+  afficherGraphique();
+}
+
+// ----------------- Graphique moderne -----------------
+let chartInstance=null;
+function afficherGraphique(){
+  const donnees=chargerDonnees();
+  if(donnees.length===0) return;
+
+  const labels=[];
+  const soldeCumul=[];
+  let cumul=0;
+
+  donnees.forEach(t=>{
+    cumul+=t.type==='entrée'?t.montant:-t.montant;
+    labels.push(`${t.date} - ${t.description}`);
+    soldeCumul.push(cumul.toFixed(2));
+  });
+
+  const ctx=document.getElementById('graphique').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:labels,
+      datasets:[{
+        label:'Solde cumulatif (€)',
+        data:soldeCumul,
+        fill:true,
+        backgroundColor:'rgba(33, 150, 243, 0.2)',
+        borderColor:'#2196f3',
+        tension:0.3,
+        pointBackgroundColor:'#2196f3',
+        pointRadius:6,
+        pointHoverRadius:8,
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label: function(context){
+              const t=donnees[context.dataIndex];
+              return `${t.type.toUpperCase()}: ${t.montant} € (${t.categorie})`;
+            }
+          }
+        },
+        legend:{ display:true }
+      },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
+}
+
+// ----------------- Export CSV -----------------
+function exportCSV(){
+  const donnees=chargerDonnees();
+  if(donnees.length===0){ alert("Aucune transaction à exporter."); return; }
+  let csv="Date,Catégorie,Type,Montant,Description\n";
+  donnees.forEach(t=>{
+    csv+=`${t.date},${t.categorie},${t.type},${t.montant},${t.description}\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='transactions.csv';a.click();
+}
+
+// ----------------- Tri tableau -----------------
+function trierTable(colIndex){
+  const table=document.getElementById('transactions');const tbody=table.tBodies[0];
+  const rows=Array.from(tbody.rows);
+  const asc=!tbody.getAttribute('data-sort-asc')||tbody.getAttribute('data-sort-col')!=colIndex;
+  rows.sort((a,b)=>{
+    let aVal=a.cells[colIndex].textContent;let bVal=b.cells[colIndex].textContent;
+    if(!isNaN(parseFloat(aVal))&&!isNaN(parseFloat(bVal))){aVal=parseFloat(aVal);bVal=parseFloat(bVal);}
+    return asc?aVal>bVal?1:-1:aVal<bVal?1:-1;
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+  tbody.setAttribute('data-sort-asc',asc);
+  tbody.setAttribute('data-sort-col',colIndex);
+}
+
+// ----------------- Initialisation -----------------
+afficherObjectif();
+afficherSolde();
+afficherHistorique();
+afficherGraphique();
+
+</script>
+</body>
+</html>
